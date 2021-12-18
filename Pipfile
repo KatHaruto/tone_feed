@@ -4,12 +4,15 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-numpy = "*"
+numpy = "==1.18"
 librosa = "*"
 matplotlib = "*"
 pyaudio = "*"
 
 [dev-packages]
+pylint = "*"
+mypy = "*"
+autopep8 = "*"
 
 [requires]
 python_version = "3.8"
