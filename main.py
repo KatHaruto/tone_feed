@@ -1,6 +1,8 @@
 import pyaudio
 import numpy as np
-#import librosa
+import librosa
+from math import log10
+import pyrubberband as pyrb
 
 
 class AudioFilter:
@@ -32,15 +34,26 @@ class AudioFilter:
 
 
 def toSpeaker(af, input_buff):
-    #Fo_shift = 500
-    #Fo = 400
-    #n_steps = np.log2(Fo_shift / Fo)
     out = np.zeros((af.out_channels, af.CHUNK))
-    out[1] = np.frombuffer(input_buff, dtype=np.int16)
-    # out[0] = librosa.effects.pitch_shift(
-    #    np.frombuffer(input_buff), 2048, n_steps=n_steps, bins_per_octave=1)
+    input_data = np.frombuffer(input_buff, dtype=np.int16).astype(np.float64)
+
+    # Fo, voiced_flag, voiced_prpb = librosa.pyin(input_data, fmin=librosa.note_to_hz(
+    #    'C2'), fmax=librosa.note_to_hz('C7'))
+    # if voiced_flag.any():
+    if 20*log10(max(input_data)) > 60:
+        #print(Fo, voiced_flag)
+        Fo_shift = 500
+        #Fo = np.mean(Fo[voiced_flag])
+        Fo = 400
+        n_steps = np.log2(Fo_shift / Fo)
+        out[0] = pyrb.pitch_shift(
+            input_data / 32768.0, 2048, 3)*32768.0
+        # out[0] = librosa.effects.pitch_shift(
+        #    input_data, 2048, n_steps=n_steps, bins_per_octave=1)
+    out[1] = input_data
     out = np.reshape(out.T, (af.CHUNK * af.out_channels))
-    out = out.astype(np.int16).tostring()
+    out = out.astype(np.int16).tobytes()
+
     return out
 
 
@@ -51,15 +64,17 @@ if __name__ == "__main__":
     # ストリーミングを始める場所
     af.in_stream.start_stream()
     af.out_stream.start_stream()
-
-    while af.in_stream.is_active() and af.out_stream.is_active():
-        I = af.in_stream.read(af.CHUNK)
-        out = toSpeaker(af, I)
-        af.out_stream.write(out)
-
-    # ストリーミングを止める場所
-    af.in_stream.stop_stream()
-    af.in_stream.close()
-    af.out_stream.stop_stream()
-    af.out_stream.close()
-    af.close()
+    try:
+        while af.in_stream.is_active() and af.out_stream.is_active():
+            I = af.in_stream.read(af.CHUNK, exception_on_overflow=False)
+            out = toSpeaker(af, I)
+            af.out_stream.write(out)
+    except KeyboardInterrupt:
+        print('\nInterrupt')
+    finally:
+        # ストリーミングを止める場所
+        af.in_stream.stop_stream()
+        af.in_stream.close()
+        af.out_stream.stop_stream()
+        af.out_stream.close()
+        af.close()
