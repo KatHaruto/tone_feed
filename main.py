@@ -1,30 +1,35 @@
 from multiprocessing import Process
 import threading
 import time
+from math import log10
+from collections import deque
+from librosa.util.exceptions import ParameterError
+from numpy import lib
 import pyaudio
 import numpy as np
+import argparse
 import librosa
-from math import log10
 import pyworld as pw
-import scipy
+from scipy.signal import get_window
 import pyrubberband as pyrb
-from collections import deque
-
-from sample import RATE
 
 
-def audio_filter():
+#from concurrent.futures import ThreadPoolExecutor
+
+
+def audio_filter(Fo_shift):
 
     p = pyaudio.PyAudio()
+
     rate = 16000  # 一秒間のサンプリング回数
     CHUNK = 1024  # 何サンプルで一つのデータとするか
-    format = pyaudio.paInt16
+    FORMAT = pyaudio.paInt16
     input_queue = deque(maxlen=CHUNK)
-    output_queue = deque(maxlen=CHUNK*2)
+    output_queue = deque(maxlen=CHUNK*2)  # 2チャンネル
 
     def recorder():
         in_stream = p.open(
-            format=format,
+            format=FORMAT,
             channels=1,
             rate=rate,
             frames_per_buffer=CHUNK,
@@ -34,28 +39,31 @@ def audio_filter():
 
         while in_stream.is_active():
             data = in_stream.read(CHUNK)
-            # len(data) -> 2048 (バイト形式のため)
-            # len(np.frombuffer(data, dtype=np.int16)) -> 1024 == CHUNK
+            # len(data) -> 2048 (なぜ？バイト形式のため?)
+            # len(np.frombuffer(data, dtype=np.int16)) -> 1024 == CHUNKとなるように
             input_queue.extend(np.frombuffer(data, dtype=np.int16))
 
     def pitch(signal):
         out_channels = 2
         out = np.zeros((out_channels, len(signal)))
-        if max(signal) > 0 and 20*log10(max(signal)) > 60:
-           # Fo, voiced_flag, voiced_prpb = librosa.pyin(
+        if Fo_shift and max(signal) > 0 and 20*log10(max(signal)) > 60:
+            # Fo, voiced_flag, voiced_prpb = librosa.pyin(
             #    signal, fmin=librosa.note_to_hz('C2'), fmax=librosa.note_to_hz('C7'))
             # librosa.pyin() リアルタイム性で断念
             _f0, t = pw.dio(signal, rate)
             Fo = pw.stonemask(signal, _f0, t, rate)
-            Fo = np.mean(Fo)
-            Fo_shift = 440
-            if Fo != 0:
+            Fo = Fo[Fo > 0]
+            if len(Fo) > 0:
+                Fo = np.mean(Fo)
                 n_steps = np.log2(Fo_shift / Fo)
+                #pitch_shift: 正規化して帰ってくる
+                # signalは符号付き16ビット配列のため-32768~32767の値となっているはず
                 out[0] = pyrb.pitch_shift(
                     signal / 32768.0, rate, n_steps) * 32768.0
         out[1] = signal
         out = np.reshape(out.T, (len(signal) * out_channels))
-        # out = out.astype(np.int16).tobytes()
+        # 出力チャンネルを1,2とし、データを1[0],1[1],1[2]...などとすると
+        # out -> [1[0],2[0],1[1],2[1],1[2],...]のような並び
 
         return out
 
@@ -63,9 +71,9 @@ def audio_filter():
 
         prev_input = np.zeros(CHUNK, dtype=np.int16)
         prev_output = np.zeros(CHUNK*2, dtype=np.int16)
-        window = scipy.signal.get_window('hann', CHUNK * 2, fftbins=True)
+        window = get_window('hann', CHUNK * 2, fftbins=True)
         while True:
-            if not len(input_queue):
+            if len(input_queue) == 0:
                 time.sleep(0.01)
                 continue
             data = np.array(input_queue, dtype='int16').astype(np.float64)
@@ -83,7 +91,7 @@ def audio_filter():
 
     def player():
         out_stream = p.open(
-            format=format,
+            format=FORMAT,
             channels=2,
             frames_per_buffer=CHUNK,
             rate=rate,
@@ -91,7 +99,7 @@ def audio_filter():
             output=True
         )
         while True:
-            if not len(output_queue):
+            if len(output_queue) == 0:
                 time.sleep(0.01)
                 continue
             data = np.array(output_queue, dtype=np.int16)
@@ -108,12 +116,22 @@ def audio_filter():
     th_convert.start()
     th_play.start()
 
+    '''with ThreadPoolExecutor(max_workers=4) as executor:
+        executor.submit(recorder)
+        executor.submit(converter)
+        executor.submit(player)'''
+
 
 if __name__ == "__main__":
     # AudioFilterのインスタンスを作る場所
-    audio_process = Process(target=audio_filter)
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-p', '--pitch')
+    args = parser.parse_args()
     try:
-        audio_process.start()
-    except KeyboardInterrupt:
-        print('\nInterrupt!')
+        if args.pitch:
+            Fo_shift = librosa.note_to_hz(args.pitch)
+    except ParameterError as e:
+        print(e)
+        exit()
+    audio_process = Process(target=audio_filter, args=(Fo_shift,))
+    audio_process.start()
