@@ -54,7 +54,8 @@ def audio_filter(Fo_shift):
             Fo = pw.stonemask(signal, _f0, t, rate)
             Fo = Fo[Fo > 0]
             if len(Fo) > 0:
-                Fo = np.mean(Fo)
+                Fo = Fo[0]
+                # print(librosa.hz_to_note(Fo))
                 n_steps = np.log2(Fo_shift / Fo)
                 #pitch_shift: 正規化して帰ってくる
                 # signalは符号付き16ビット配列のため-32768~32767の値となっているはず
