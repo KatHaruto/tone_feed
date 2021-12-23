@@ -5,17 +5,17 @@ name = "pypi"
 
 [packages]
 numpy = "==1.18"
-librosa = "*"
-matplotlib = "*"
-pyaudio = "*"
-pyrubberband = "*"
-scipy = "*"
-pyworld = "*"
+librosa = "==0.8.1"
+matplotlib = "==3.5.1"
+pyaudio = "==0.2.11"
+pyrubberband = "==0.3.0"
+scipy = "==1.7.3"
+pyworld = "==0.3.0"
 
 [dev-packages]
-pylint = "*"
-mypy = "*"
-autopep8 = "*"
+pylint = "==2.12.2"
+mypy = "==0.920"
+autopep8 = "==1.6.0"
 
 [requires]
 python_version = "3.8"
