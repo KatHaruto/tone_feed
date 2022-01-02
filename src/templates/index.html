@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta
+      name="viewport"
+      content="width=device-width, user-scalable=yes, initial-scale=1, maximum-scale=1"
+    />
+    <script src="https://cdn.webrtc-experiment.com/MediaStreamRecorder.js"></script>
+    <script src="https://cdn.WebRTC-Experiment.com/gumadapter.js"></script>
+    <script
+      type="text/javascript"
+      src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.0/socket.io.min.js"
+    ></script>
+  </head>
+  <body>
+    <button id="start">Start</button>
+    <button id="stop">Stop</button>
+    <div id="note"></div>
+    <br />
+    <div id="hz"></div>
+    <script type="text/javascript">
+      let socket;
+      const timeInterval = 300;
+      let mediaRecorder;
+      const namespace = "/test";
+      let cnt = 0;
+      function start(onSuccess, onError) {
+        navigator.mediaDevices
+          .getUserMedia({ video: false, audio: true })
+          .then(onSuccess)
+          .catch(onError);
+      }
+
+      function initwebSocket() {
+        socket = io(namespace);
+        console.log(socket);
+        socket.on("connect", () => {
+          socket.emit("my_event", { data: "I'm connected!" });
+        });
+        socket.on("note", (data) => {
+          document.getElementById("note").textContent = "音階" + data.note;
+          document.getElementById("hz").textContent = "周波数" + data.hz;
+        });
+        socket.on("pitch_shift", (shifted) => {
+          const audio_shifted = createElement("audio");
+          document.getElementById("shifted");
+        });
+      }
+
+      //Stop stream
+      function AudioStop() {
+        mediaRecorder.stop();
+        mediaRecorder.stream.stop();
+      }
+      document.querySelector("#start").onclick = () => {
+        initwebSocket();
+        start(onMediaSuccess, onMediaError);
+      };
+
+      document.querySelector("#stop").onclick = () => {
+        AudioStop();
+        socket.emit("client_disconnecting");
+      };
+
+      function onMediaSuccess(stream) {
+        var audio = document.createElement("audio");
+        audio.controls = "controls";
+        audio.muted = "muted";
+        audio.srcObject = stream;
+        //audio.src = window.URL.createObjectURL(stream);
+        audio.play();
+
+        mediaRecorder = new MediaStreamRecorder(stream);
+        mediaRecorder.stream = stream;
+        mediaRecorder.recorderType = StereoAudioRecorder;
+        mediaRecorder.mimeType = "audio/wav";
+
+        mediaRecorder.audioChannels = 1; //mono
+        mediaRecorder.ondataavailable = (blob) => {
+          socket.emit("wave", blob);
+        };
+        mediaRecorder.start(timeInterval);
+      }
+
+      function onMediaError(error) {
+        console.log("error:" + error);
+      }
+
+      window.onbeforeunload = function () {
+        socket.emit("client_disconnecting");
+      };
+    </script>
+  </body>
+</html>
