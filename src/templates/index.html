@@ -7,6 +7,7 @@
     />
     <script src="https://cdn.webrtc-experiment.com/MediaStreamRecorder.js"></script>
     <script src="https://cdn.WebRTC-Experiment.com/gumadapter.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@2.8.0"></script>
     <script
       type="text/javascript"
       src="//cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.0/socket.io.min.js"
@@ -18,7 +19,92 @@
     <div id="note"></div>
     <br />
     <div id="hz"></div>
-    <script type="text/javascript">
+    <canvas id="myChart"></canvas>
+    <script>
+      //変数の用意
+      let ctx;
+      let width = document.documentElement.clientWidth;
+      //let height = document.documentElement.clientHeight;
+      let height = 500;
+      let mousey = -1;
+      let point_list = [];
+      let point_num = 100; //打つ点の数・多分ここまで大きくなくていい
+      let point_size = 3; //点の大きさ
+      let time_span = 50; //実行間隔
+      const c_freq = [65.406, 130.813, 261.626, 523.251, 1046.502];
+      let base_c = 0;
+
+      //canvasの用意
+      const canvas = document.getElementById("myChart");
+      canvas.width = width;
+      //canvas.height = document.documentElement.clientHeight;
+      canvas.height = height;
+      ctx = canvas.getContext("2d");
+      ctx.lineWidth = 10;
+      ctx.strokeStyle = "#FF0000";
+      ctx.lineCap = "round";
+      function draw() {
+        //毎回一回全部消す
+        ctx.clearRect(0, 0, width, height);
+        //楽譜の線を書く
+        drawnotes();
+        if (point_list.length > point_num) {
+          point_list = point_list.slice(1);
+          point_list.push(mousey);
+        } else {
+          point_list.push(mousey);
+        }
+        for (let i = 0; i < point_list.length; i++) {
+          drawpoint(
+            width / 2 - (width / 2 / point_num) * (point_list.length - i),
+            point_list[i]
+          );
+        }
+      }
+      //点を書く
+      function drawpoint(x, y) {
+        ctx.beginPath();
+        ctx.arc(
+          x,
+          y,
+          point_size,
+          (0 * Math.PI) / 180,
+          (360 * Math.PI) / 180,
+          false
+        );
+        ctx.fillStyle = "rgb(255,0,0)";
+        ctx.fill();
+        ctx.restore();
+      }
+
+      //五線譜を描く
+      function drawnotes() {
+        const notes = [
+          "C",
+          "C#",
+          "D",
+          "D#",
+          "E",
+          "F",
+          "F#",
+          "G",
+          "G#",
+          "A",
+          "A#",
+          "B",
+          "C",
+        ];
+        for (let i = 0; i < 13; i++) {
+          ctx.fillText(notes[i], 0, 10 + height * (2 - Math.pow(2, i / 12)));
+          ctx.beginPath();
+          ctx.moveTo(10, 10 + height * (2 - Math.pow(2, i / 12)));
+          ctx.lineTo(width, 10 + height * (2 - Math.pow(2, i / 12)));
+          ctx.strokeStyle = "#000000";
+          ctx.lineWidth = 5;
+          ctx.stroke();
+        }
+      }
+
       let socket;
       const timeInterval = 300;
       let mediaRecorder;
@@ -33,32 +119,38 @@
 
       function initwebSocket() {
         socket = io(namespace);
-        console.log(socket);
         socket.on("connect", () => {
           socket.emit("my_event", { data: "I'm connected!" });
         });
         socket.on("note", (data) => {
-          document.getElementById("note").textContent = "音階" + data.note;
-          document.getElementById("hz").textContent = "周波数" + data.hz;
-        });
-        socket.on("pitch_shift", (shifted) => {
-          const audio_shifted = createElement("audio");
-          document.getElementById("shifted");
+          if (data) {
+            base_c = c_freq.filter((e) => e <= data.hz).slice(-1)[0];
+            mousey = height * (2 - data.hz / base_c);
+            document.getElementById("note").textContent = "音階" + data.note;
+            document.getElementById("hz").textContent = "周波数" + data.hz;
+          } else {
+            mousey = -1;
+          }
         });
       }
-
+      function drawStop() {
+        clearInterval(drawTimer);
+      }
       //Stop stream
       function AudioStop() {
         mediaRecorder.stop();
         mediaRecorder.stream.stop();
       }
+      let drawTimer;
       document.querySelector("#start").onclick = () => {
         initwebSocket();
         start(onMediaSuccess, onMediaError);
+        drawTimer = setInterval(draw, time_span);
       };
 
       document.querySelector("#stop").onclick = () => {
         AudioStop();
+        drawStop();
         socket.emit("client_disconnecting");
       };
 
