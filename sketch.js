@@ -17,9 +17,8 @@ const height = 500;
 let point_list = [];
 const point_num = 100;
 const point_size = 3;
-const c_freq = [32.703, 65.406, 130.813, 261.626, 523.251, 1046.502];
 const freqs = new Array(12);
-freqs[0] = c_freq;
+freqs[0] = [32.703, 65.406, 130.813, 261.626, 523.251, 1046.502];
 for (let i = 1; i < freqs.length; i++) {
   freqs[i] = freqs[i - 1].map((v) => v * Math.pow(2, i / 12));
 }
@@ -30,7 +29,7 @@ let ctx;
 let freq = 0;
 let shifter = null;
 let merger = null;
-let isUpdate = false;
+let isUpdate = true;
 const d3 = 146.832;
 function setup() {
   canvas = document.getElementById("myChart");
@@ -133,18 +132,23 @@ function draw() {
     point_list.shift();
   }
   if (freq > 0) {
-    base_c = c_freq.filter((e) => e <= freq).slice(-1)[0];
+    base_c = freqs[0].filter((e) => e <= freq).slice(-1)[0];
     freq_co = height * (2 - freq / base_c);
     point_list.push(freq_co);
 
+    if (isUpdate) {
+      isUpdate = false;
+    }
     target = freqs[targetNote.value].filter((e) => e >= base_c)[0];
     distance_from_base_c = Math.round(12 * Math.log2(freq / base_c));
     distance_from_target_base_c = Math.round(12 * Math.log2(target / base_c));
-    if (isUpdate) {
-      shifter.pitch = distance_from_base_c - distance_from_target_base_c;
-      isUpdate = false;
-    }
-    console.log(height * (2 - target / base_c));
+
+    shifter.pitch =
+      freq < target * Math.pow(2, 1 / 2)
+        ? distance_from_target_base_c - distance_from_base_c
+        : 12 - distance_from_target_base_c - distance_from_base_c;
+
+    console.log(shifter.pitch, target);
   }
   //console.log(point_list);
   point_list.map((p, i) => {
