@@ -15,26 +15,43 @@ const width = document.documentElement.clientWidth;
 //const height = document.documentElement.clientHeight;
 const height = 500;
 let point_list = [];
-const point_num = 100;
+const point_num = 10;
 const point_size = 3;
 const freqs = new Array(12);
 freqs[0] = [32.703, 65.406, 130.813, 261.626, 523.251, 1046.502];
 for (let i = 1; i < freqs.length; i++) {
-  freqs[i] = freqs[i - 1].map((v) => v * Math.pow(2, i / 12));
+  freqs[i] = freqs[0].map((v) => v * Math.pow(2, i / 12));
 }
-const targetNote = document.getElementById("target");
-let base_c = 0;
+let targetNote;
+let closest;
+let dist;
+let base_c = 130.813;
 let canvas;
 let ctx;
 let freq = 0;
 let shifter = null;
 let merger = null;
 let isUpdate = true;
-const d3 = 146.832;
+const notes = [
+  "C",
+  "C#",
+  "D",
+  "D#",
+  "E",
+  "F",
+  "F#",
+  "G",
+  "G#",
+  "A",
+  "A#",
+  "B",
+  "C",
+];
 function setup() {
   canvas = document.getElementById("myChart");
   canvas.width = width;
-  canvas.height = height;
+  canvas.height = height + 20;
+  targetNote = document.getElementById("target").value;
   ctx = canvas.getContext("2d");
   ctx.lineWidth = 10;
   ctx.strokeStyle = "#FF0000";
@@ -90,30 +107,19 @@ const getPitch = () => {
   });
 };
 const onChangeTarget = () => {
-  isUpdate = true;
+  targetNote = document.getElementById("target").value;
 };
 function drawnotes() {
-  const notes = [
-    "C",
-    "C#",
-    "D",
-    "D#",
-    "E",
-    "F",
-    "F#",
-    "G",
-    "G#",
-    "A",
-    "A#",
-    "B",
-    "C",
-  ];
   notes.map((note, i) => {
-    ctx.fillText(note, 0, 10 + (height - 20) * (2 - Math.pow(2, i / 12)));
+    ctx.fillText(note, 0, 10 + height * (2 - Math.pow(2, i / 12)));
     ctx.beginPath();
-    ctx.moveTo(10, 5 + (height - 20) * (2 - Math.pow(2, i / 12)));
-    ctx.lineTo(width, 5 + (height - 20) * (2 - Math.pow(2, i / 12)));
-    ctx.strokeStyle = "#000000";
+    ctx.moveTo(10, 5 + height * (2 - Math.pow(2, i / 12)));
+    ctx.lineTo(width, 5 + height * (2 - Math.pow(2, i / 12)));
+    if (i == targetNote || (targetNote == 0 && (i == 0 || i == 12))) {
+      ctx.strokeStyle = "#00FF00";
+    } else {
+      ctx.strokeStyle = "#000000";
+    }
     ctx.lineWidth = 5;
     ctx.stroke();
   });
@@ -136,37 +142,23 @@ function draw() {
     freq_co = height * (2 - freq / base_c);
     point_list.push(freq_co);
 
-    if (isUpdate) {
-      isUpdate = false;
-    }
-    target = freqs[targetNote.value].filter((e) => e >= base_c)[0];
-    distance_from_base_c = Math.round(12 * Math.log2(freq / base_c));
-    distance_from_target_base_c = Math.round(12 * Math.log2(target / base_c));
+    closest = freqs[targetNote].reduce(function (prev, curr) {
+      return Math.abs(curr - freq) < Math.abs(prev - freq) ? curr : prev;
+    });
+    dist = Math.round(
+      (freq < closest ? -1 : 1) *
+        (12 * Math.log2(Math.min(freq, closest) / Math.max(freq, closest)))
+    );
 
-    shifter.pitch =
-      freq < target * Math.pow(2, 1 / 2)
-        ? distance_from_target_base_c - distance_from_base_c
-        : 12 - distance_from_target_base_c - distance_from_base_c;
-
-    console.log(shifter.pitch, target);
+    shifter.pitch = dist;
+    //shifter.pitch
+    select("#shift").html("\nshifted pitch" + dist);
   }
-  //console.log(point_list);
+
   point_list.map((p, i) => {
     drawpoint(
       width / 2 - (width / 2 / point_num) * (point_list.length - i),
       7.5 + p
     );
   });
-  ctx.beginPath();
-  ctx.arc(
-    width / 2,
-    7.5 + height * (2 - target / base_c),
-    point_size,
-    (0 * Math.PI) / 180,
-    (360 * Math.PI) / 180,
-    false
-  );
-  ctx.fillStyle = "rgb(0,255,0)";
-  ctx.fill();
-  ctx.restore();
 }
