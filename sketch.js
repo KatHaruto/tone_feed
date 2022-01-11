@@ -111,6 +111,9 @@ const onChangeTarget = () => {
 };
 function drawnotes() {
   notes.map((note, i) => {
+    if ([1, 3, 6, 8, 10].includes(i)) {
+      return;
+    }
     ctx.fillText(note, 0, 10 + height * (2 - Math.pow(2, i / 12)));
     ctx.beginPath();
     ctx.moveTo(10, 5 + height * (2 - Math.pow(2, i / 12)));
