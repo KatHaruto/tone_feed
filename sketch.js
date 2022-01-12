@@ -18,20 +18,15 @@ let point_list = [];
 const point_num = 10;
 const point_size = 3;
 const freqs = new Array(12);
-freqs[0] = [32.703, 65.406, 130.813, 261.626, 523.251, 1046.502];
-for (let i = 1; i < freqs.length; i++) {
-  freqs[i] = freqs[0].map((v) => v * Math.pow(2, i / 12));
-}
 let targetNote;
 let closest;
-let dist;
 let base_c = 130.813;
 let canvas;
 let ctx;
-let freq = 0;
-let shifter = null;
-let merger = null;
-let isUpdate = true;
+let freq = -1;
+let shifter;
+let splitter;
+let merger;
 const notes = [
   "C",
   "C#",
@@ -48,42 +43,46 @@ const notes = [
   "C",
 ];
 function setup() {
+  initializeCanvas();
+  targetNote = document.getElementById("target").value;
+  freqs[0] = [32.703, 65.406, 130.813, 261.626, 523.251, 1046.502];
+  for (let i = 1; i < freqs.length; i++) {
+    freqs[i] = freqs[0].map((v) => v * Math.pow(2, i / 12));
+  }
+  mic = new p5.AudioIn();
+  mic2 = mic;
+  mic.start();
+}
+
+const initializeCanvas = () => {
   canvas = document.getElementById("myChart");
   canvas.width = width;
   canvas.height = height + 20;
-  targetNote = document.getElementById("target").value;
   ctx = canvas.getContext("2d");
   ctx.lineWidth = 10;
   ctx.strokeStyle = "#FF0000";
   ctx.lineCap = "round";
-  mic = new p5.AudioIn();
-  mic.start();
-}
+};
 
 function touchStarted() {
   userStartAudio();
   getAudioContext().suspend();
-  // このスケッチのAudioContextを返す
-  // https://p5js.org/reference/#/p5.sound/getAudioContext
   if (getAudioContext().state !== "running") {
-    // https://developer.mozilla.org/ja/docs/Web/API/AudioContext
-    // AudioContextオブジェクト
+    //audioContext = getAudioContext();
     audioContext = getAudioContext();
-    // あらかじめ中断させられた音声コンテキストの時間の進行を返す。
     audioContext.resume();
     Tone.context = audioContext;
+
     // ここから本格スタート
     startPitch();
-    if (mic) {
-      shifter = new Tone.PitchShift({
-        pitch: 0,
-      });
-
-      merger = new Tone.Merge(2).connect(audioContext.destination, 0, 0);
-      mic.connect(audioContext.destination, 1, 1);
-      mic.connect(shifter);
-      shifter.connect(merger);
-    }
+    shifter = new Tone.PitchShift({
+      pitch: 0,
+    });
+    merger = audioContext.createChannelMerger(2);
+    mic.connect(merger, 0, 0);
+    mic.connect(shifter);
+    shifter.connect(merger, 0, 1);
+    merger.connect(audioContext.destination);
   }
 }
 const startPitch = () => {
@@ -111,15 +110,14 @@ const onChangeTarget = () => {
 };
 function drawnotes() {
   notes.map((note, i) => {
-    if ([1, 3, 6, 8, 10].includes(i)) {
-      return;
-    }
-    ctx.fillText(note, 0, 10 + height * (2 - Math.pow(2, i / 12)));
+    ctx.fillText(note, 0, 15 + height * (2 - Math.pow(2, i / 12)));
     ctx.beginPath();
-    ctx.moveTo(10, 5 + height * (2 - Math.pow(2, i / 12)));
-    ctx.lineTo(width, 5 + height * (2 - Math.pow(2, i / 12)));
+    ctx.moveTo(15, 10 + height * (2 - Math.pow(2, i / 12)));
+    ctx.lineTo(width, 10 + height * (2 - Math.pow(2, i / 12)));
     if (i == targetNote || (targetNote == 0 && (i == 0 || i == 12))) {
       ctx.strokeStyle = "#00FF00";
+    } else if ([1, 3, 6, 8, 10].includes(i)) {
+      ctx.strokeStyle = "#C0C0C0";
     } else {
       ctx.strokeStyle = "#000000";
     }
@@ -127,41 +125,41 @@ function drawnotes() {
     ctx.stroke();
   });
 }
-function drawpoint(x, y) {
+function drawPoint(x, y) {
   ctx.beginPath();
   ctx.arc(x, y, point_size, (0 * Math.PI) / 180, (360 * Math.PI) / 180, false);
   ctx.fillStyle = "rgb(255,0,0)";
   ctx.fill();
   ctx.restore();
 }
-function draw() {
-  ctx.clearRect(0, 0, width, height);
-  drawnotes();
-  if (point_list.length > point_num) {
-    point_list.shift();
-  }
-  if (freq > 0) {
-    base_c = freqs[0].filter((e) => e <= freq).slice(-1)[0];
-    freq_co = height * (2 - freq / base_c);
-    point_list.push(freq_co);
 
-    closest = freqs[targetNote].reduce(function (prev, curr) {
-      return Math.abs(curr - freq) < Math.abs(prev - freq) ? curr : prev;
-    });
-    dist = Math.round(
-      (freq < closest ? -1 : 1) *
-        (12 * Math.log2(Math.min(freq, closest) / Math.max(freq, closest)))
-    );
-
-    shifter.pitch = dist;
-    //shifter.pitch
-    select("#shift").html("\nshifted pitch" + dist);
-  }
-
+const drawAllPoints = () => {
   point_list.map((p, i) => {
-    drawpoint(
+    drawPoint(
       width / 2 - (width / 2 / point_num) * (point_list.length - i),
       7.5 + p
     );
   });
+};
+function draw() {
+  ctx.clearRect(0, 0, width, height + 20);
+  drawnotes();
+  if (point_list.length > point_num) {
+    point_list.shift();
+  }
+  if (freq < 0) {
+    drawAllPoints();
+    return;
+  }
+  base_c = freqs[0].filter((e) => e <= freq).slice(-1)[0];
+  point_list.push(height * (2 - freq / base_c));
+
+  closest = freqs[targetNote].reduce((prev, curr) => {
+    return Math.abs(curr - freq) < Math.abs(prev - freq) ? curr : prev;
+  });
+  shifter.pitch = Math.round(
+    (freq < closest ? -1 : 1) *
+      (12 * Math.log2(Math.min(freq, closest) / Math.max(freq, closest)))
+  );
+  drawAllPoints();
 }
