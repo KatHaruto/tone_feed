@@ -15,7 +15,7 @@ const width = document.documentElement.clientWidth;
 //const height = document.documentElement.clientHeight;
 const height = 500;
 let point_list = [];
-const point_num = 10;
+const point_num = 50;
 const point_size = 3;
 const freqs = new Array(12);
 let targetNote;
