@@ -1,11 +1,4 @@
 # tone_feed
 
-sensor applicatoin.
-
-## setup
-
-```
-docker-compose up -d --build
-```
-
-access locahost:8080
+sensor applicatoin.  
+access [here](gallant-borg-3ad3ea.netlify.app).
